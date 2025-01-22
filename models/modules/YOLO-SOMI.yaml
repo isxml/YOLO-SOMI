@@ -1,0 +1,65 @@
+# Parameters
+# Parameters
+nc: 10  # number of classes
+#depth_multiple: 0.33  # model depth multiple
+#width_multiple: 0.50  # layer channel multiple
+depth_multiple: 1.0  # model depth multiple
+width_multiple: 1.0  # layer channel multiple
+anchors: 4
+# 4,6,  12,8,  7,14,  20,12,  13,22,  31,18,  21,33,  46,23,  37,37,  31,56,  65,34,  55,57,  95,52,  60,90,  147,76,  103,134
+#  - [3,4,  4,8,  7,6,  7,11]
+#  - [13,8,  10,17,  18,12,  17,23]  # P3/8
+#  - [32,15,  31,26,  28,49,  65,35]  # P4/16
+#  - [78,73,  64,98,  161,47,  235,85]  # P5/32
+
+
+# YOLOv8.0n backbone
+backbone:
+  # [from, repeats, module, args]
+   [[-1, 1, Conv, [64, 3, 2]], # 0-P1/2
+    [-1, 1, ODConv_3rd, [128, 3, 2 ,4]],# 1-P2/4   64
+    [-1, 3, C2fCBAM, [128, True]],
+    [-1, 1, Conv, [256, 3, 2]], # 3-P3/8    32
+    [-1, 6, C2fCBAM, [256, True]],
+    [-1, 1, Conv, [512, 3, 2]], # 5-P4/16  16
+    [-1, 6, C2fCBAM, [512, True]],
+    [-1, 1, Conv, [1024, 3, 2]], # 7-P5/32  8
+    [-1, 3, C2fCBAM, [1024, True]],
+    [-1, 1, SPPF, [1024, 5]], # 9
+]
+# YOLOv8.0n head
+head:
+   [[ 2, 1, Conv, [ 256 ] ],  # 10   64
+    [ 4, 1, Conv, [ 256 ] ],  # 11   32
+    [ 6, 1, Conv, [ 256 ] ],  # 12   16
+    [ 9, 1, Conv, [ 256 ] ],  # 13   8
+
+    [-1, 1, nn.Upsample, [None, 2, "nearest"]],
+    [[-1, 12], 1, BiFPN, []], # cat backbone P4   16   512 16    512 16
+    [-1, 1, SEAM, [256,1,16]],
+    [-1, 3, C2fEACBAM, [256]], # 17
+
+    [-1, 1, nn.Upsample, [None, 2, "nearest"]],
+    [[-1, 11], 1, BiFPN, []] ,# cat backbone P3   32    256 32   256 32
+    [-1, 1, SEAM, [256,1,16]],
+    [-1, 3, C2fEACBAM, [256]] ,# 21
+
+    [-1, 1, nn.Upsample, [ None, 2, "nearest" ] ],
+    [[ -1, 10], 1, BiFPN, [] ] ,# cat backbone P2  64   128  64   128  64
+    [-1, 1, SEAM, [256,1,16]],
+    [-1, 3, C2fEACBAM, [256] ] ,# 25
+
+    [-1, 1, ODConv_3rd, [256, 3, 2 ,4]],
+    [[-1, 11, 21], 1, BiFPN, []], # cat head P4  32   256 32   256 32  256 32
+    [-1, 3, C2fEACBAM, [256]], # 28
+
+    [-1, 1, ODConv_3rd, [256, 3, 2 ,4]],
+    [[-1, 12,17], 1, BiFPN, []], # cat head P5    16   512  16  512 16   256 16
+    [-1, 3, C2fEACBAM, [512]] ,# 31 (P5/32-large)
+
+    [-1, 1, ODConv_3rd, [256, 3, 2 ,4]],
+    [[ -1, 13], 1, BiFPN, [] ], # cat head P4   8    512 8  512 8
+    [-1, 3, C2fEACBAM, [1024]], # 34 (P4/16-medium)
+
+    [[25, 28, 31, 34], 1, DecoupledDetect, [nc,anchors]], # Detect(P3, P4, P5)
+]
